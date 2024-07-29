@@ -17,6 +17,11 @@ config.scrollback_lines = 50000
 config.enable_scroll_bar = false
 config.default_domain = "WSL:Arch"
 
+if wezterm.target_triple == "x86_64-pc-windows-msvc" then
+	-- config.default_prog = { "wsl.exe", "~", "-d", "Arch" }
+	config.default_prog = { "pwsh.exe" }
+end
+
 -- change font
 config.font = wezterm.font({
 	family = "JetBrains Mono",

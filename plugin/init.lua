@@ -223,16 +223,21 @@ end
 wez.on("format-tab-title", function(tab, _, _, conf, _, _)
   local palette = conf.resolved_palette
 
-  local index = tab.tab_index + 1
-  local offset = #tostring(index) + #config.left_separator + 2
-  local title = index .. config.left_separator .. tab_title(tab)
+  local pre = (tab.tab_index + 1) .. config.left_separator
+  local title = tab_title(tab)
+  local post = "  "
+  local offset = #pre + #post
 
-  local outname = basename(tab_title(tab))
-  local width = conf.tab_max_width - offset
-  if #title > conf.tab_max_width and #outname == 0 then
-    title = index .. config.left_separator .. "…" .. basename(wez.truncate_left(tab_title(tab), width))
+  local stripped_title = basename(title)
+  if stripped_title == "" then
+    title = "…" .. wez.truncate_left(title, conf.tab_max_width - offset - 1)
+  elseif
+    #stripped_title + offset > conf.tab_max_width
+    and not (#stripped_title == #wez.truncate_left(stripped_title, conf.tab_max_width - offset))
+  then
+    title = "…" .. wez.truncate_left(stripped_title, conf.tab_max_width - offset - 1)
   else
-    title = index .. config.left_separator .. outname
+    title = stripped_title
   end
 
   local fg = palette.tab_bar.inactive_tab.fg_color
@@ -245,7 +250,7 @@ wez.on("format-tab-title", function(tab, _, _, conf, _, _)
   return {
     { Background = { Color = bg } },
     { Foreground = { Color = fg } },
-    { Text = title .. "  " },
+    { Text = pre .. title .. post },
   }
 end)
 

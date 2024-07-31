@@ -10,6 +10,8 @@ end
 config.colors = wezterm.plugin.require("https://github.com/neapsix/wezterm").moon.colors()
 config.inactive_pane_hsb = { hue = 1.0, saturation = 1.0, brightness = 0.8 }
 config.window_padding = { left = 0, right = 0, top = 0, bottom = 0 }
+config.initial_rows = 44
+config.initial_cols = 132
 
 -- configure important settings
 config.audible_bell = "Disabled"
@@ -88,6 +90,7 @@ local bar = wezterm.plugin.require "https://github.com/EugenioBertolini/wezterm-
 bar.apply_to_config(config, {
   position = "top",
   left_separator = "   ",
+  pane_icon = "󰣇",
 })
 
 return config

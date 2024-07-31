@@ -8,7 +8,8 @@ local config = {
   field_separator = "  | ", -- more regular separation with one space removed
   leader_icon = "",
   workspace_icon = "",
-  pane_icon = "",
+  pane_icon = "",
+  pane_icon_window = "",
   user_icon = "",
   hostname_icon = "󰒋",
   clock_icon = "󰃰",
@@ -33,8 +34,7 @@ local config = {
 }
 
 local username = os.getenv "USER" or os.getenv "LOGNAME" or os.getenv "USERNAME"
-local home = (os.getenv "USERPROFILE" or os.getenv "HOME" or wez.home_dir or ""):gsub("\\", "/")
-local is_windows = package.config:sub(1, 1) == "\\"
+local current_tab_path = ""
 
 local M = {}
 
@@ -53,51 +53,12 @@ local function tableMerge(t1, t2)
   return t1
 end
 
-local find_git_dir = function(directory)
-  directory = directory:gsub("~", home)
-
-  while directory do
-    local handle = io.open(directory .. "/.git/HEAD", "r")
-    if handle then
-      handle:close()
-      directory = directory:match "([^/]+)$"
-      return directory
-    elseif directory == "/" or directory == "" then
-      break
-    else
-      directory = directory:match "(.+)/[^/]*"
-    end
-  end
-
-  return nil
-end
-
-local get_cwd_hostname = function(pane, search_git_root_instead)
+local get_cwd_hostname = function(pane)
   local cwd, hostname = "", ""
   local cwd_uri = pane:get_current_working_dir()
   if cwd_uri then
-    if type(cwd_uri) == "userdata" then
-      -- Running on a newer version of wezterm and we have
-      -- a URL object here, making this simple!
-
-      ---@diagnostic disable-next-line: undefined-field
-      cwd = cwd_uri.file_path
-      ---@diagnostic disable-next-line: undefined-field
-      hostname = cwd_uri.host or wez.hostname()
-    else
-      -- an older version of wezterm, 20230712-072601-f4abf8fd or earlier,
-      -- which doesn't have the Url object
-      cwd_uri = cwd_uri:sub(8)
-      local slash = cwd_uri:find "/"
-      if slash then
-        hostname = cwd_uri:sub(1, slash - 1)
-        -- and extract the cwd from the uri, decoding %-encoding
-        cwd = cwd_uri:sub(slash):gsub("%%(%x%x)", function(hex)
-          return string.char(tonumber(hex, 16))
-        end)
-      end
-    end
-
+    cwd = cwd_uri.file_path
+    hostname = cwd_uri.host or wez.hostname()
     -- Remove the domain name portion of the hostname
     local dot = hostname:find "[.]"
     if dot then
@@ -105,18 +66,6 @@ local get_cwd_hostname = function(pane, search_git_root_instead)
     end
     if hostname == "" then
       hostname = wez.hostname()
-    end
-
-    if is_windows then
-      cwd = cwd:gsub("/" .. home .. "(.-)$", "~%1")
-    else
-      cwd = cwd:gsub(home .. "(.-)$", "~%1")
-    end
-
-    ---search for the git root of the project if specified
-    if search_git_root_instead then
-      local git_root = find_git_dir(cwd)
-      cwd = git_root or cwd ---fallback to cwd
     end
   end
 
@@ -228,6 +177,12 @@ wez.on("format-tab-title", function(tab, _, _, conf, _, _)
   local post = "  "
   local offset = #pre + #post
 
+  -- Windows: keep cwd name only (my WSL already returns cwd name only -> no need)
+  if title:find "\\" then
+    title = title:gsub("(.*[/\\])(.*)", "%2")
+  end
+
+  -- check if dir needs truncation
   local stripped_title = basename(title)
   if stripped_title == "" then
     title = "…" .. wez.truncate_left(title, conf.tab_max_width - offset - 1)
@@ -240,11 +195,28 @@ wez.on("format-tab-title", function(tab, _, _, conf, _, _)
     title = stripped_title
   end
 
+  -- Windows: add my username (fuge) if title == "~" for parity with WSL
+  if title == "~" and #title == 1 then
+    title = username or title
+  end
+
+  -- WSL: It's cooler to show root as " /"
+  if title == "…/" then
+    title = " /"
+  end
+
+  -- Windows: to fix bug when in root directory (C:/ or D:/, ...)
+  if title == "…" then
+    title = tab_title(tab)
+  end
+
   local fg = palette.tab_bar.inactive_tab.fg_color
   local bg = palette.tab_bar.inactive_tab.bg_color
   if tab.is_active then
     fg = palette.tab_bar.active_tab.fg_color
     bg = palette.tab_bar.active_tab.bg_color
+    -- Windows: to fix bug with pane:get_current_working_dir() -> always returns $HOME
+    current_tab_path = tab.active_pane.title
   end
 
   return {
@@ -265,6 +237,19 @@ wez.on("update-status", function(window, pane)
 
   local palette = conf.resolved_palette
 
+  local cwd, hostname = get_cwd_hostname(pane)
+  local pane_icon = config.pane_icon
+
+  if string.find(cwd, "^/([A-Z]:)") then
+    -- Windows: get cwd from exposed variable in format-tab-title
+    cwd = current_tab_path
+    cwd = cwd:gsub("\\", "/")
+    pane_icon = config.pane_icon_window
+  else
+    -- WSL: cwd works but it doesn't replace $HOME with ~, so here we go
+    cwd = cwd:gsub("/home/" .. username, "~")
+  end
+
   -- left status
   local stat = " " .. config.workspace_icon .. " " .. window:active_workspace() .. " "
   local stat_fg = palette.ansi[config.ansi_colors.workspace]
@@ -280,7 +265,7 @@ wez.on("update-status", function(window, pane)
     { Text = stat },
 
     { Foreground = { Color = palette.ansi[config.ansi_colors.active_tab] } },
-    { Text = " " .. config.pane_icon .. "  " },
+    { Text = " " .. pane_icon .. "  " },
   })
 
   -- right status
@@ -296,7 +281,6 @@ wez.on("update-status", function(window, pane)
     table.insert(cells, { Text = config.right_separator .. config.user_icon .. config.field_separator })
   end
 
-  local cwd, hostname = get_cwd_hostname(pane, true)
   if enabled_modules.hostname then
     table.insert(cells, { Foreground = { Color = palette.ansi[config.ansi_colors.hostname] } })
     table.insert(cells, { Text = hostname })

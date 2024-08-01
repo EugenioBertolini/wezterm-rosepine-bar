@@ -17,7 +17,7 @@ config.initial_cols = 132
 config.audible_bell = "Disabled"
 config.scrollback_lines = 50000
 config.enable_scroll_bar = false
-config.default_domain = "WSL:Arch"
+config.default_domain = "local"
 
 if wezterm.target_triple == "x86_64-pc-windows-msvc" then
   config.default_prog = { "pwsh.exe" }

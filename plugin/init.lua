@@ -143,13 +143,13 @@ M.apply_to_config = function(c, opts)
   local scheme = c.colors
   local default_colors = {
     tab_bar = {
-      background = "transparent",
+      background = scheme.background,
       active_tab = {
-        bg_color = "transparent",
+        bg_color = scheme.background,
         fg_color = scheme.ansi[config.ansi_colors.active_tab],
       },
       inactive_tab = {
-        bg_color = "transparent",
+        bg_color = scheme.background,
         fg_color = scheme.ansi[config.ansi_colors.inactive_tab],
       },
     },
